@@ -1,0 +1,102 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role check - relies on user profile in 'users' collection
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+        (getRole() == 'admin' || getRole() == 'super_admin' || request.auth.token.email == 'jobinjames2027@mca.ajce.in');
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && 
+        (getRole() == 'super_admin' || request.auth.token.email == 'jobinjames2027@mca.ajce.in');
+    }
+
+    // --- User Profiles ---
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'username', 'email', 'role', 'bestScore', 'createdAt', 'updatedAt']) &&
+               data.keys().size() == 7 &&
+               data.uid == request.auth.uid &&
+               data.username is string && data.username.size() >= 3 && data.username.size() <= 32 &&
+               data.email is string && data.email.size() <= 128 &&
+               data.role in ['player', 'moderator', 'admin', 'super_admin'] &&
+               data.bestScore is number &&
+               data.createdAt is string &&
+               data.updatedAt is string;
+      }
+
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      
+      allow create: if isOwner(userId) && 
+                      isValidUser(incoming()) && 
+                      incoming().role == 'player'; // Force default role on signup
+
+      allow update: if isSignedIn() && (
+        // Action: Update Score
+        (isOwner(userId) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['bestScore', 'updatedAt']) &&
+         incoming().bestScore >= existing().bestScore) ||
+        
+        // Action: Update Profile (username)
+        (isOwner(userId) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['username', 'updatedAt'])) ||
+
+        // Action: Admin Role Update
+        (isSuperAdmin() && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt']))
+      );
+    }
+
+    // --- Leaderboard ---
+    match /leaderboard/{scoreId} {
+      function isValidScore(data) {
+        return data.keys().hasAll(['uid', 'username', 'score', 'timestamp']) &&
+               data.keys().size() == 4 &&
+               data.uid == request.auth.uid &&
+               data.username is string && data.username.size() <= 32 &&
+               data.score is number &&
+               data.timestamp == request.time;
+      }
+
+      allow list: if true; // Public leaderboard
+      allow get: if true;
+      
+      allow create: if isSignedIn() && isValidScore(incoming());
+      
+      allow delete: if isAdmin();
+    }
+  }
+}

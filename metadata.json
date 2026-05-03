@@ -1,0 +1,6 @@
+{
+  "name": "2048 Pro",
+  "description": "A production-grade 2048 puzzle game with real-time leaderboards, user authentication, and a robust administrative dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
