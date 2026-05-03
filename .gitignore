@@ -36,7 +36,6 @@ yarn-error.log*
 coverage/
 
 # Firebase
-firebase-applet-config.json
 .firebase/
 fire-debug.log
 firebase-debug.log
