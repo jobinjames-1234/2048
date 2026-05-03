@@ -8,7 +8,7 @@ import {
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { auth, googleProvider, db } from './lib/firebase';
 import { getUserProfile, createUserProfile, updateBestScore, submitScore, getLeaderboard } from './services/db';
-import { submitScoreToDjango } from './services/djangoApi';
+import { submitScoreToDjango, getDjangoLeaderboard } from './services/djangoApi';
 import { UserProfile, ScoreEntry, Direction } from './types';
 import { use2048 } from './hooks/use2048';
 import { Grid } from './components/Grid';
@@ -75,8 +75,22 @@ function App() {
 
   const loadLeaderboard = useCallback(async () => {
     setScoresLoading(true);
-    const data = await getLeaderboard();
-    setLeaderboard(data);
+    try {
+      const data = await getDjangoLeaderboard();
+      // Map DjangoLeaderboardEntry to ScoreEntry
+      const mappedData: ScoreEntry[] = data.map(entry => ({
+        id: entry.id.toString(),
+        uid: '', // Django leaderboard doesn't expose UID
+        username: entry.username,
+        score: entry.score,
+        timestamp: entry.created_at,
+      }));
+      setLeaderboard(mappedData);
+    } catch (e) {
+      console.error("Failed to fetch leaderboard from Django, falling back to Firestore", e);
+      const fallbackData = await getLeaderboard();
+      setLeaderboard(fallbackData);
+    }
     setScoresLoading(false);
   }, []);
 
@@ -164,6 +178,8 @@ function App() {
                   </div>
                   <button 
                     onClick={handleLogout}
+                    aria-label="Sign out"
+                    title="Sign out"
                     className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-red-400"
                   >
                     <LogOut className="w-5 h-5" />
