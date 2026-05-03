@@ -8,6 +8,7 @@ import {
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { auth, googleProvider, db } from './lib/firebase';
 import { getUserProfile, createUserProfile, updateBestScore, submitScore, getLeaderboard } from './services/db';
+import { submitScoreToDjango } from './services/djangoApi';
 import { UserProfile, ScoreEntry, Direction } from './types';
 import { use2048 } from './hooks/use2048';
 import { Grid } from './components/Grid';
@@ -207,9 +208,14 @@ function GameView({ profile, leaderboard, loadingScores, onLogin }: { profile: U
       await updateBestScore(profile.uid, score);
     }
     if (profile && score > 0) {
-      await submitScore(profile.uid, profile.username, score);
+      // Submit to Firestore (existing) and Django backend (new) in parallel
+      const maxTile = Math.max(...grid.flat().map(t => t?.value ?? 0));
+      await Promise.allSettled([
+        submitScore(profile.uid, profile.username, score),
+        submitScoreToDjango(score, maxTile),
+      ]);
     }
-  }, [profile, score]);
+  }, [profile, score, grid]);
 
   useEffect(() => {
     if (gameOver) {
