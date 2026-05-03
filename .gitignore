@@ -43,3 +43,13 @@ firebase-debug.log
 firestore-debug.log
 pubsub-debug.log
 ui-debug.log
+
+
+.venv/
+
+# Django
+backend/__pycache__/
+backend/*.sqlite3
+backend/media/
+backend/staticfiles/
+backend/.env
